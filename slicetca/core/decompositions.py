@@ -198,6 +198,14 @@ class PartitionTCA(nn.Module):
                         self.vectors[i][j].copy_(torch.tensor(components[i][j], device=self.device))
         self.zero_grad()
 
+    def get_component(self, partition: int, product_pos:int, detach=False, numpy=False):
+        data = self.positive_function[partition][product_pos](self.vectors[partition][product_pos]).data
+        if detach:
+            data = data.detach()
+        if numpy:
+            data = data.cpu().numpy()
+        return data
+
     def fit(self,
             X: torch.Tensor,
             optimizer: torch.optim.Optimizer,
