@@ -4,7 +4,7 @@ import tqdm
 import copy
 from typing import List, Callable
 from ..core.decompositions import SliceTCA
-from .helper import get_partition_weights
+from .helper import get_partition_patterns
 
 
 def sgd_coupled_invariance(models: List[SliceTCA],
@@ -37,11 +37,10 @@ def sgd_coupled_invariance(models: List[SliceTCA],
     for model in models:
         model.requires_grad_(False)
 
-    for transformation in transformations:
-        transformation.requires_grad_(True)
+    params = [param for transformation in transformations for param in transformation.parameters()]
 
     optimizer = torch.optim.Adam(
-        [param for transformation in transformations for param in transformation.parameters()],
+        params,
         lr=learning_rate
     )
 
@@ -50,29 +49,28 @@ def sgd_coupled_invariance(models: List[SliceTCA],
     iterator = tqdm.tqdm(range(max_iter)) if progress_bar else range(max_iter)
 
     for iteration in iterator:
-        optimizer.zero_grad()
+        
 
         total_loss = 0.0
         for i, model_i in enumerate(models):
             components_i = model_i.get_components(detach=True)
-            for j, model_j in enumerate(models):
-                if i == j:
-                    continue
+            for j in range(i+1, len(models)):
+                model_j = models[j]
                 components_j = model_j.get_components(detach=True)
 
                 components_transformed_i = transformations[i](copy.deepcopy(components_i))
                 components_transformed_j = transformations[j](copy.deepcopy(components_j))
-                
-                weights_i = get_partition_weights(components_transformed_i, coupled_partitions)
-                weights_j = get_partition_weights(components_transformed_j, coupled_partitions)
 
-                # Compute the objective function between the transformed components
+                weights_i = get_partition_patterns(components_transformed_i, coupled_partitions)
+                weights_j = get_partition_patterns(components_transformed_j, coupled_partitions)
+
                 loss = objective_function(weights_i, weights_j)
                 total_loss += loss
 
         if verbose: print(f'Iteration: {iteration}, Loss: {total_loss.item()}')
         if progress_bar: iterator.set_description(f'Coupled Invariance Loss: {total_loss.item():.4f} ')
 
+        optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
 

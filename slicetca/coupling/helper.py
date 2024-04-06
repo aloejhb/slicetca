@@ -30,5 +30,21 @@ def get_partition_weights(components: Sequence[Sequence[torch.Tensor]], partitio
 
     :return: The weights, which correspond to u, v or w, depending on the chosen partition.
     """
+    weights = []
     for partition in partitions:
-        yield components[partition][0]
+        weights.append(components[partition][0])
+    return weights
+
+def get_partition_patterns(components: Sequence[Sequence[torch.Tensor]], partitions: List[int]):
+    """
+    Get the pattern components for a list of partitions.
+
+    :param components: components.
+    :param partitions: The indices of the partitions.
+
+    :return: The patterns, which correspond to A, B or C, depending on the chosen partition.
+    """
+    patterns = []
+    for partition in partitions:
+        patterns.append(components[partition][1])
+    return patterns
