@@ -36,7 +36,7 @@ class CoupledDecomposition(nn.Module):
         return X_hats
     
 
-    def total_loss(self, Xs, similarity_idx, gamma=1.0):
+    def total_loss(self, Xs, similarity_idxs, gamma=1.0):
         """
         Computes the total loss including reconstruction and similarity terms.
 
@@ -48,23 +48,28 @@ class CoupledDecomposition(nn.Module):
         - Total loss value.
         """
         X_hats = self.construct()
-        reconstruction_loss = sum([torch.norm(X - X_hat, p='fro')**2 for X, X_hat in zip(Xs, X_hats)])
 
-        simliarity_losses = []
-        for n in range(self.num_compositions):
-            for m in range(n + 1, self.num_compositions):
-                diff = self.decomposers[n].get_component(similarity_idx, 0) - self.decomposers[m].get_component(similarity_idx, 0)
-                simliarity_losses.append(gamma * torch.norm(diff, p='fro')**2)
+        reconstruct_losses = [torch.norm(X - X_hat, p='fro')**2 / X.numel()
+                              for X, X_hat in zip(Xs, X_hats)]
+        reconstruction_loss = sum(reconstruct_losses) / len(reconstruct_losses)
 
-        similarity_loss = sum(simliarity_losses)
-        loss = reconstruction_loss + similarity_loss
+        similarity_losses = []
+        for similarity_idx in similarity_idxs:
+            for n in range(self.num_compositions):
+                for m in range(n + 1, self.num_compositions):
+                    diff = self.decomposers[n].get_component(similarity_idx, 0) - self.decomposers[m].get_component(similarity_idx, 0)
+                    similarity_losses.append(torch.norm(diff, p='fro')**2 / diff.numel())
+
+        similarity_loss = sum(similarity_losses) / len(similarity_losses)
+        loss = reconstruction_loss + gamma * similarity_loss
         return loss
 
 
     def fit(self,
             Xs: List[torch.Tensor],
             optimizer: torch.optim.Optimizer,
-            similarity_idx: int,
+            similarity_idxs: List[int],
+            similarity_gamma: float = 1.0,
             max_iter: int = 1000,
             min_std: float = 10 ** -3,
             iter_std: int = 100,
@@ -79,7 +84,7 @@ class CoupledDecomposition(nn.Module):
         iterator = tqdm(range(max_iter)) if progress_bar else range(max_iter)
 
         for iteration in iterator:
-            total_loss = self.total_loss(Xs, similarity_idx)
+            total_loss = self.total_loss(Xs, similarity_idxs, gamma=similarity_gamma)
 
             optimizer.zero_grad()
             total_loss.backward()
